@@ -32,10 +32,9 @@ THE SOFTWARE.
 #include "LuaWebClient.h"
 
 #ifdef _MSC_VER
-#pragma comment(lib, "libcurl_imp.lib")
+#pragma comment(lib, "libcurl.lib")
 #endif
 
-#define MEM_STREAM_DEFAULT_SIZE	(8 * 1024)
 #define LUA_WEB_CLIENT			("luna.webclient")
 #define LUA_WEB_CLIENT_MT		("com.dpull.lib.WebClientMT")
 
