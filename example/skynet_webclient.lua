@@ -1,7 +1,14 @@
 local Skynet = require "skynet";
-local WebClientLib = require("luabase.webclient")
-local WebClient = WebClientLib.Create();
-local Downloads = {}
+WebClientLib = WebClientLib or require("luna.webclient")
+Downloads = Downloads or {}
+WebClient = WebClient or WebClientLib.Create(function (index, data)
+    local download = Downloads[index];
+    assert(download);
+
+    if download.type == "data" then
+        download.data = download.data .. data;
+    end
+end);
 local Lib = {};
 
 function FormatUrl(urlFormat, ...)
@@ -23,22 +30,7 @@ function Lib.DownloadData(session, source, urlFormat, ...)
     Downloads[index] = {
         type = "data", 
         url = url, 
-        session = session,
-        address = source,
-    };
-end
-
-function Lib.DownloadFile(session, source, file, urlFormat, ...)
-    local url = FormatUrl(urlFormat, ...);
-    local index = WebClient:DownloadFile(url, file);
-    if not index then
-        return Skynet.ret();
-    end
-
-    Downloads[index] = {
-        type = "file", 
-        url = url, 
-        file = file, 
+        data = "",
         session = session,
         address = source,
     };
@@ -54,9 +46,13 @@ function Lib.Query()
     for k, v in pairs(data) do
         local para = Downloads[k];
         if para then
-            local param, size = Skynet.pack(v);
-
-            Skynet.redirect(para.address, 0, Skynet.PTYPE_RESPONSE, para.session, param, size);
+            local param, size;
+            if v.error then
+                param, size = Skynet.pack(v);
+            else
+                param, size = Skynet.pack({data = para.data});
+            end
+            Downloads[k] = nil;
         end
     end
 end

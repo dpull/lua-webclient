@@ -24,57 +24,18 @@ THE SOFTWARE.
 
 #pragma once
 
-class CWebStream
+class CWebClient;
+struct CWebRequest
 {
-public:
-	virtual ~CWebStream() {}
-	virtual BOOL Save(void* pvData, size_t uLen) = 0;
-	virtual BOOL PushResultTable(lua_State* L) = 0;
-};
-
-class CWebMemStream :public CWebStream
-{
-public:
-	CWebMemStream();
-	virtual ~CWebMemStream();
-
-	virtual BOOL Save(void* pvData, size_t uLen);
-	virtual BOOL PushResultTable(lua_State* L);
-
-private:
-	char*  m_pszData;
-	size_t m_uDataSize;
-	size_t m_uDataLen;
-};
-
-class CWebFileStream :public CWebStream
-{
-public:
-	CWebFileStream(const char szFile[]);
-	virtual ~CWebFileStream();
-
-	virtual BOOL Save(void* pvData, size_t uLen);
-	virtual BOOL PushResultTable(lua_State* L);
-
-private:
-	FILE* m_pFile;
-};
-
-class CWebRequest
-{
-public:
-	CWebRequest();
-	virtual ~CWebRequest();
-
-public:
-	void*			m_pIndex;
-	CWebStream*		m_pStream;
-	char			m_szError[CURL_ERROR_SIZE];
-	char			m_szIP[16];
+	void* m_pIndex;
+	char  m_szError[CURL_ERROR_SIZE];
+	char  m_szIP[16];
+	CWebClient* m_pWebClient;
 };
 
 typedef std::map<CURL*, CWebRequest*> CWebRequestTable;
 typedef std::list<CWebRequest*> CWebDataList;
+typedef size_t CWebClientWriteCallback(char* pszBuffer, size_t uBlockSize, size_t uCount, void* pvArg);
 
 class CWebClient
 {
@@ -83,21 +44,21 @@ public:
 	virtual ~CWebClient();
 
 public:
-	BOOL Setup();
+	bool Setup(CWebClientWriteCallback* pCallback, void* pvUserData);
 	void Clear();
 	
-	// XY_DELETE 每个XWebData*
-	void Query(CWebDataList* pRetWebData);
+	CURLMcode Query(CWebDataList* pRetWebData);
 
-	void* DownloadData(const char szUrl[]);
-	void* DownloadFile(const char szUrl[], const char szFile[]);
+	void* Download(const char szUrl[]);
 
-	CWebStream* GetWebStream(void* pIndex);
+	const void* GetUserData() { return m_pvUserData; }
 
 private:
 	static size_t OnWebDataCallback(void* pvData, size_t uBlock, size_t uCount, void* pvArg);
 
 private:
-	CWebRequestTable	m_WebRequestTable;
-	CURLM*				m_pCurlMHandle;
+	CWebRequestTable			m_WebRequestTable;
+	CURLM*						m_pCurlMHandle;
+	CWebClientWriteCallback*	m_pCallback;
+	void*						m_pvUserData;
 };

@@ -1,6 +1,13 @@
-WebClientLib = WebClientLib or require("luabase.webclient")
-WebClient = WebClient or WebClientLib.Create();
+WebClientLib = WebClientLib or require("luna.webclient")
 Downloads = Downloads or {}
+WebClient = WebClient or WebClientLib.Create(function (index, data)
+    local download = Downloads[index];
+    assert(download);
+
+    if download.type == "data" then
+        download.data = download.data .. data;
+    end
+end);
 
 function DownloadData(url, callback)
     local index = WebClient:DownloadData(url);
@@ -11,20 +18,7 @@ function DownloadData(url, callback)
     Downloads[index] = {
         type = "data", 
         url = url, 
-        callback = callback
-    };
-end
-
-function DownloadFile(url, file, callback)
-    local index = WebClient:DownloadFile(url, file);
-    if not index then
-        return;
-    end
-
-    Downloads[index] = {
-        type = "file", 
-        url = url, 
-        file = file, 
+        data = "",
         callback = callback
     };
 end
@@ -46,7 +40,7 @@ function Query()
         local para = Downloads[k];
         if para then
             if para.callback then
-                Lib.CallBack({para.callback, v});
+                Lib.CallBack({para.callback, para.url, para.data});
             end
             Downloads[k] = nil;         
         else

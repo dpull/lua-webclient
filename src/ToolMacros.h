@@ -165,6 +165,7 @@ enum LogType
 // 用来取代MS的MAKELONG,MAKEWORD
 #define MAKE_DWORD(a, b)      ((DWORD)(((WORD)(((DWORD)(a)) & 0xffff)) | ((DWORD)((WORD)(((DWORD)(b)) & 0xffff))) << 16))
 #define MAKE_WORD(a, b)      ((WORD)(((BYTE)(((DWORD)(a)) & 0xff)) | ((WORD)((BYTE)(((DWORD)(b)) & 0xff))) << 8))
+#define _countof(_Array) (sizeof(_Array) / sizeof(_Array[0]))
 
 #if defined(__linux) || defined(__APPLE__)
     #define LOWORD(l)           ((WORD)(((DWORD)(l)) & 0xffff))
@@ -172,3 +173,5 @@ enum LogType
     #define LOBYTE(w)           ((BYTE)(((DWORD)(w)) & 0xff))
     #define HIBYTE(w)           ((BYTE)((((DWORD)(w)) >> 8) & 0xff))
 #endif
+
+typedef unsigned char       BYTE;

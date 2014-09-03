@@ -36,115 +36,16 @@ THE SOFTWARE.
 #endif
 
 #define MEM_STREAM_DEFAULT_SIZE	(8 * 1024)
-#define LUA_WEB_CLIENT			("luabase.webclient")
+#define LUA_WEB_CLIENT			("luna.webclient")
 #define LUA_WEB_CLIENT_MT		("com.dpull.lib.WebClientMT")
 
 using namespace std;
 
-CWebMemStream::CWebMemStream()
-{
-	m_uDataLen = 0;
-	m_uDataSize = 0;
-	m_pszData = NULL;
-}
-
-CWebMemStream::~CWebMemStream()
-{
-	if (m_pszData)
-	{
-		free(m_pszData);
-		m_pszData = NULL;
-	}
-}
-
-BOOL CWebMemStream::Save(void* pvData, size_t uLen)
-{
-	BOOL bResult = false;
-	size_t uNewDataLen = m_uDataLen + uLen;
-
-	if (uNewDataLen >= m_uDataSize)
-	{
-		m_uDataSize *= 2;
-		m_uDataSize = max(m_uDataSize, (size_t)MEM_STREAM_DEFAULT_SIZE);
-		m_uDataSize = max(uNewDataLen, m_uDataSize);
-
-		m_pszData = (char*)realloc(m_pszData, m_uDataSize);
-	}
-
-	CLOG_FAILED_JUMP(m_pszData);
-
-	memcpy(m_pszData + m_uDataLen, pvData, uLen);
-	m_uDataLen = uNewDataLen;
-
-	bResult = true;
-Exit0:
-	return bResult;
-}
-
-BOOL CWebMemStream::PushResultTable(lua_State* L)
-{
-	lua_newtable(L);
-	lua_pushlstring(L, m_pszData, m_uDataLen);
-	lua_setfield(L, -2, "data");
-	return true;
-}
-
-CWebFileStream::CWebFileStream(const char szFile[])
-{
-	m_pFile = fopen(szFile, "wb");
-	if (!m_pFile)
-	{
-		Log(eLogDebug, "XWebDataFileStream create file [%s] failed!", szFile);
-	}
-}
-
-CWebFileStream::~CWebFileStream()
-{
-	if (m_pFile)
-	{
-		fclose(m_pFile);
-		m_pFile = NULL;
-	}
-}
-BOOL CWebFileStream::Save(void* pvData, size_t uLen)
-{
-	BOOL bResult = false;
-	size_t uResult = 0;
-
-	C_FAILED_JUMP(m_pFile);
-
-	uResult = fwrite(pvData, uLen, 1, m_pFile);
-	CLOG_FAILED_JUMP(uResult == 1);
-
-	bResult = true;
-Exit0:
-	return bResult;
-}
-
-BOOL CWebFileStream::PushResultTable(lua_State* L)
-{
-	lua_newtable(L);
-	lua_pushboolean(L, m_pFile != NULL);
-	lua_setfield(L, -2, "file");
-	return true;
-}
-
-CWebRequest::CWebRequest()
-{
-	m_pIndex = NULL;
-	m_szError[0] = '\0';
-	m_szIP[0] = '\0';
-	m_pStream = NULL;
-}
-
-CWebRequest::~CWebRequest()
-{
-	C_DELETE(m_pStream);
-}
-
 CWebClient::CWebClient()
 {
 	m_pCurlMHandle = NULL;
+	m_pCallback = NULL;
+	m_pvUserData = NULL;
 }
 
 CWebClient::~CWebClient()
@@ -152,14 +53,18 @@ CWebClient::~CWebClient()
 	Clear();
 }
 
-BOOL CWebClient::Setup()
+bool CWebClient::Setup(CWebClientWriteCallback* pCallback, void* pvUserData)
 {
-	BOOL bResult = false;
+	bool bResult = false;
+
+	assert(pCallback);
+	m_pCallback = pCallback;
+	m_pvUserData = pvUserData;
 
 	curl_global_init(CURL_GLOBAL_ALL);
 
 	m_pCurlMHandle = curl_multi_init();
-	CLOG_FAILED_JUMP(m_pCurlMHandle);
+	C_FAILED_JUMP(m_pCurlMHandle);
 
 	bResult = true;
 Exit0:
@@ -186,21 +91,21 @@ void CWebClient::Clear()
 	}
 
 	curl_global_cleanup();
+
+	m_pCallback = NULL;
+	m_pvUserData = NULL;
 }
 
-void CWebClient::Query(CWebDataList* pWebDataList)
+CURLMcode CWebClient::Query(CWebDataList* pWebDataList)
 {
+	int nResult = CURLM_LAST;
 	CURLMsg* pCurMsg = NULL;
 	CURLMcode euRetCode = CURLM_LAST;
 	int nRunningHandleCount = 0;
 	int nLeftMessageCount = 0;
 
 	euRetCode = curl_multi_perform(m_pCurlMHandle, &nRunningHandleCount);
-	if (euRetCode != CURLM_OK && euRetCode != CURLM_CALL_MULTI_PERFORM)
-	{
-		Log(eLogDebug, "curl_multi_perform failed, error code:%d", euRetCode);
-		goto Exit0;
-	}
+	C_FAILED_RET_CODE(((euRetCode == CURLM_OK) || (euRetCode == CURLM_CALL_MULTI_PERFORM)), euRetCode);
 
 	while (true)
 	{
@@ -219,9 +124,9 @@ void CWebClient::Query(CWebDataList* pWebDataList)
 			const char* pszIP = NULL;
 			CURLcode euCurlRetCode = curl_easy_getinfo(pHandle, CURLINFO_PRIMARY_IP, &pszIP);
 
-			if (euRetCode == CURLE_OK && pszIP)
+			if (euCurlRetCode == CURLE_OK && pszIP)
 			{
-				strncpy(pData->m_szIP, pszIP, _countof(pData->m_szIP));
+				strncpy(pData->m_szIP, pszIP, sizeof(pData->m_szIP) / sizeof(pData->m_szIP[0]));
 			}
 
 			curl_easy_cleanup(pHandle);
@@ -233,159 +138,154 @@ void CWebClient::Query(CWebDataList* pWebDataList)
 		curl_multi_remove_handle(m_pCurlMHandle, pCurMsg->easy_handle);
 	}
 
+	nResult = CURLM_OK;
 Exit0:
-	return;
+	return (CURLMcode)nResult;
 }
 
-size_t CWebClient::OnWebDataCallback(void* pvData, size_t uBlock, size_t uCount, void* pvArg)
+void* CWebClient::Download(const char szUrl[])
+{
+	void* pResult = 0;
+	CURLMcode euRetCode = CURLM_LAST;
+	CWebRequest* pWebData = new CWebRequest;
+	CURL* pHandle = curl_easy_init();
+
+	CLOG_FAILED_JUMP(pWebData);
+	CLOG_FAILED_JUMP(pHandle);
+
+	pWebData->m_pIndex = pHandle;
+	pWebData->m_szError[0] = '\0';
+	pWebData->m_szIP[0] = '\0';
+	pWebData->m_pWebClient = this;
+
+	curl_easy_setopt(pHandle, CURLOPT_NOSIGNAL, 1);
+	curl_easy_setopt(pHandle, CURLOPT_WRITEFUNCTION, m_pCallback);
+	curl_easy_setopt(pHandle, CURLOPT_WRITEDATA, pWebData);
+	curl_easy_setopt(pHandle, CURLOPT_ERRORBUFFER, pWebData->m_szError);
+	curl_easy_setopt(pHandle, CURLOPT_CONNECTTIMEOUT_MS, 5000);
+	curl_easy_setopt(pHandle, CURLOPT_URL, szUrl);
+
+	euRetCode = curl_multi_add_handle(m_pCurlMHandle, pHandle);
+	CLOG_FAILED_JUMP(euRetCode == CURLM_OK);
+
+	m_WebRequestTable[pHandle] = pWebData;
+
+	pResult = pWebData->m_pIndex;
+Exit0:
+	if (!pResult)
+	{
+		C_DELETE(pWebData);
+		if (pHandle)
+		{
+			curl_easy_cleanup(pHandle);
+			pHandle = NULL;
+		}
+	}
+	return pResult;
+}
+
+struct CLuaWebClient
+{
+	CWebClient* m_pWebClient;
+	lua_State*	m_pLuaState;
+	int			m_nLuaFuncRef;
+};
+
+static size_t LuaWriteCallback(char* pszBuffer, size_t uBlockSize, size_t uCount, void* pvArg)
 {
 	CWebRequest* pWebData = (CWebRequest*)pvArg;
 	assert(pWebData);
 
-	size_t uLen = uBlock * uCount;
+	size_t uLen = uBlockSize * uCount;
 	if (pWebData->m_szError[0] != '\0')
 		return uLen;
 
-	if (!pWebData->m_pStream->Save(pvData, uLen))
-		strcpy(pWebData->m_szError, "XStream error!");
+    bool bRetCode = false;
+	CLuaWebClient* pLuaWebClient = (CLuaWebClient*)pWebData->m_pWebClient->GetUserData();
 
+    int nTop = lua_gettop(pLuaWebClient->m_pLuaState);
+    
+	lua_rawgeti(pLuaWebClient->m_pLuaState, LUA_REGISTRYINDEX, pLuaWebClient->m_nLuaFuncRef);
+	if (lua_isfunction(pLuaWebClient->m_pLuaState, -1))
+	{
+        
+        
+        lua_pushlightuserdata(pLuaWebClient->m_pLuaState, pWebData->m_pIndex);
+		lua_pushlstring(pLuaWebClient->m_pLuaState, pszBuffer, uLen);
+        
+        bRetCode = Lua_XCall(pLuaWebClient->m_pLuaState, 2, 0);
+		if (!bRetCode)
+		{
+			strncpy(pWebData->m_szError, "XStream error!", sizeof(pWebData->m_szError) / sizeof(pWebData->m_szError[0]));
+		}
+	}
+    
+    lua_settop(pLuaWebClient->m_pLuaState, nTop);
 	return uLen;
 }
 
-void* CWebClient::DownloadData(const char szUrl[])
+static CWebClient* GetWebClient(lua_State* L, int nIndex)
 {
-	void* pResult = 0;
-	CURLMcode euRetCode = CURLM_LAST;
-	CWebRequest* pWebData = new CWebRequest;
-	CURL* pHandle = curl_easy_init();
-
-	CLOG_FAILED_JUMP(pWebData);
-	CLOG_FAILED_JUMP(pHandle);
-
-	pWebData->m_pIndex = pHandle;
-
-	pWebData->m_pStream = new CWebMemStream;
-	CLOG_FAILED_JUMP(pWebData->m_pStream);
-
-	curl_easy_setopt(pHandle, CURLOPT_NOSIGNAL, 1);
-	curl_easy_setopt(pHandle, CURLOPT_WRITEFUNCTION, CWebClient::OnWebDataCallback);
-	curl_easy_setopt(pHandle, CURLOPT_WRITEDATA, pWebData);
-	curl_easy_setopt(pHandle, CURLOPT_ERRORBUFFER, pWebData->m_szError);
-	curl_easy_setopt(pHandle, CURLOPT_CONNECTTIMEOUT_MS, 5000);
-	curl_easy_setopt(pHandle, CURLOPT_URL, szUrl);
-
-	euRetCode = curl_multi_add_handle(m_pCurlMHandle, pHandle);
-	CLOG_FAILED_JUMP(euRetCode == CURLM_OK);
-
-	m_WebRequestTable[pHandle] = pWebData;
-
-	pResult = pWebData->m_pIndex;
-Exit0:
-	if (!pResult)
+	CLuaWebClient* pLuaClient = (CLuaWebClient*)luaL_checkudata(L, nIndex, LUA_WEB_CLIENT_MT);
+	if (pLuaClient)
 	{
-		C_DELETE(pWebData);
-		if (pHandle)
-		{
-			curl_easy_cleanup(pHandle);
-			pHandle = NULL;
-		}
+		return pLuaClient->m_pWebClient;
 	}
-	return pResult;
-}
-
-void* CWebClient::DownloadFile(const char szUrl[], const char szFile[])
-{
-	void* pResult = 0;
-	CURLMcode euRetCode = CURLM_LAST;
-	CWebRequest* pWebData = new CWebRequest;
-	CURL* pHandle = curl_easy_init();
-
-	CLOG_FAILED_JUMP(pWebData);
-	CLOG_FAILED_JUMP(pHandle);
-
-	pWebData->m_pIndex = pHandle;
-
-	pWebData->m_pStream = new CWebFileStream(szFile);
-	CLOG_FAILED_JUMP(pWebData->m_pStream);
-
-	curl_easy_setopt(pHandle, CURLOPT_NOSIGNAL, 1);
-	curl_easy_setopt(pHandle, CURLOPT_WRITEFUNCTION, CWebClient::OnWebDataCallback);
-	curl_easy_setopt(pHandle, CURLOPT_WRITEDATA, pWebData);
-	curl_easy_setopt(pHandle, CURLOPT_ERRORBUFFER, pWebData->m_szError);
-	curl_easy_setopt(pHandle, CURLOPT_CONNECTTIMEOUT_MS, 5000);
-	curl_easy_setopt(pHandle, CURLOPT_URL, szUrl);
-
-	euRetCode = curl_multi_add_handle(m_pCurlMHandle, pHandle);
-	CLOG_FAILED_JUMP(euRetCode == CURLM_OK);
-
-	m_WebRequestTable[pHandle] = pWebData;
-
-	pResult = pWebData->m_pIndex;
-Exit0:
-	if (!pResult)
-	{
-		C_DELETE(pWebData);
-		if (pHandle)
-		{
-			curl_easy_cleanup(pHandle);
-			pHandle = NULL;
-		}
-	}
-	return pResult;
-}
-
-CWebStream* CWebClient::GetWebStream(void* pIndex)
-{
-	CWebRequestTable::iterator it = m_WebRequestTable.find(pIndex);
-	if (it != m_WebRequestTable.end())
-		return it->second->m_pStream;
 	return NULL;
 }
 
-int LuaCreate(lua_State* L)
+static int LuaCreate(lua_State* L)
 {
-	BOOL bResult = false;
-	BOOL bRetCode = false;
+	if (!lua_isfunction(L, 1))
+		return luaL_argerror(L, 1, "parameter callback invalid");
+
+	bool bRetCode = false;
 	CWebClient* pClient = new CWebClient;
-	CWebClient** ppUserValue = NULL;
+	CLuaWebClient* pLuaClient = (CLuaWebClient*)lua_newuserdata(L, sizeof(CLuaWebClient));
+    int nTop = lua_gettop(L);
 
-	bRetCode = pClient->Setup();
-	CLOG_FAILED_JUMP(bRetCode);
+	pLuaClient->m_pLuaState = L;
+    lua_pushvalue(L, 1);
+	pLuaClient->m_nLuaFuncRef = luaL_ref(L, LUA_REGISTRYINDEX);
+	pLuaClient->m_pWebClient = pClient;
 
-	ppUserValue = (CWebClient**)lua_newuserdata(L, sizeof(pClient));
-	*ppUserValue = pClient;
+	bRetCode = pClient->Setup(LuaWriteCallback, pLuaClient);
+	if (!bRetCode)
+	{
+		luaL_unref(L, LUA_REGISTRYINDEX, pLuaClient->m_nLuaFuncRef);
+		pLuaClient->m_nLuaFuncRef = LUA_NOREF;
+		pLuaClient->m_pLuaState = NULL;
+		pLuaClient->m_pWebClient = NULL;
+		C_DELETE(pClient);
+		return luaL_error(L, "webclient create failed");
+	}
 
+    lua_settop(L, nTop);
 	luaL_getmetatable(L, LUA_WEB_CLIENT_MT);
 	lua_setmetatable(L, -2);
-
-Exit0:
 	return 1;
 }
 
-CWebClient* GetWebClient(lua_State* L, int nIndex)
+static int LuaDestory(lua_State* L)
 {
-	CWebClient** ppUserValue = (CWebClient**)luaL_checkudata(L, nIndex, LUA_WEB_CLIENT_MT);
-	if (ppUserValue)
+	CLuaWebClient* pLuaClient = (CLuaWebClient*)luaL_checkudata(L, 1, LUA_WEB_CLIENT_MT);
+	if (pLuaClient)
 	{
-		return *ppUserValue;
+		luaL_unref(L, LUA_REGISTRYINDEX, pLuaClient->m_nLuaFuncRef);
+		pLuaClient->m_nLuaFuncRef = LUA_NOREF;
+		pLuaClient->m_pLuaState = NULL;
+		C_DELETE(pLuaClient->m_pWebClient);
 	}
-	return NULL;
-}
-
-int LuaDestory(lua_State* L)
-{
-	CWebClient* pClient = GetWebClient(L, 1);
-	C_DELETE(pClient);
 	return 0;
 }
 
-int LuaQuery(lua_State* L)
+static int LuaQuery(lua_State* L)
 {
 	CWebClient* pClient = GetWebClient(L, 1);
 	CWebDataList DataList;
 
 	if (!pClient)
-		return luaL_error(L, "parameter self invalid");
+		return luaL_argerror(L, 1, "parameter self invalid");
 
 	pClient->Query(&DataList);
 
@@ -406,7 +306,7 @@ int LuaQuery(lua_State* L)
 		}
 		else
 		{
-			pData->m_pStream->PushResultTable(L);
+			lua_newtable(L);
 		}
 		lua_settable(L, -3);
 		C_DELETE(pData);
@@ -415,18 +315,18 @@ int LuaQuery(lua_State* L)
 	return 1;
 }
 
-int LuaDownloadData(lua_State* L)
+static int LuaDownload(lua_State* L)
 {
 	CWebClient* pClient = GetWebClient(L, 1);
 	const char* pszUrl = lua_tostring(L, 2);
 
 	if (!pClient)
-		return luaL_error(L, "parameter self invalid");
+		return luaL_argerror(L, 1, "parameter self invalid");
 
 	if (!pszUrl)
-		return luaL_error(L, "parameter url invalid");
+		return luaL_argerror(L, 2, "parameter url invalid");
 
-	void* pIndex = pClient->DownloadData(pszUrl);
+	void* pIndex = pClient->Download(pszUrl);
 	if (pIndex)
 		lua_pushlightuserdata(L, pIndex);
 	else
@@ -435,49 +335,19 @@ int LuaDownloadData(lua_State* L)
 	return 1;
 }
 
-int LuaDownloadFile(lua_State* L)
-{
-	CWebClient* pClient = GetWebClient(L, 1);
-	const char* pszUrl = lua_tostring(L, 2);
-	const char* pszFile = lua_tostring(L, 3);
-
-	if (!pClient)
-		return luaL_error(L, "parameter self invalid");
-
-	if (!pszUrl)
-		return luaL_error(L, "parameter url invalid");
-
-	if (!pszFile)
-		return luaL_error(L, "parameter file invalid");
-
-	void* pIndex = pClient->DownloadFile(pszUrl, pszFile);
-	if (pIndex)
-		lua_pushlightuserdata(L, pIndex);
-	else
-		lua_pushnil(L);
-
-	return 1;
-}
-
-int LuaQueryProgressStatus(lua_State* L)
+static int LuaQueryProgressStatus(lua_State* L)
 {
 	CURLcode euRetCode = CURL_LAST;
 	CWebClient* pClient = GetWebClient(L, 1);
 	void* pIndex = lua_touserdata(L, 2);
-	CWebStream* pStream = NULL;
 	double dwContentLen = 0.0f;
 	double dwDownloadLen = 0.0f;
 
 	if (!pClient)
-		return luaL_error(L, "parameter self invalid");
+		return luaL_argerror(L, 1, "parameter self invalid");
 
 	if (!pIndex)
-		return luaL_error(L, "parameter index invalid");
-
-	pStream = pClient->GetWebStream(pIndex);
-	if (!pStream)
-		return luaL_error(L, "parameter index not exist");
-
+		return luaL_argerror(L, 2, "parameter index invalid");
 
 	euRetCode = curl_easy_getinfo(pIndex, CURLINFO_SIZE_DOWNLOAD, &dwDownloadLen);
 	if (euRetCode != CURLE_OK)
@@ -492,7 +362,7 @@ int LuaQueryProgressStatus(lua_State* L)
 	return 2;
 }
 
-int LuaUrlEncoding(lua_State* L)
+static int LuaUrlEncoding(lua_State* L)
 {
 	CURL* pHandle = curl_easy_init();
 	size_t uLen = 0;
@@ -527,14 +397,13 @@ luaL_Reg WebClientCreateFuns[] = {
 luaL_Reg WebClientFuns[] = {
 	{ "__gc", LuaDestory },
 	{ "Query", LuaQuery },
-	{ "DownloadData", LuaDownloadData },
-	{ "DownloadFile", LuaDownloadFile },
+	{ "Download", LuaDownload },
 	{ "QueryProgressStatus", LuaQueryProgressStatus },
 	{ NULL, NULL }
 };
 
 #if (LUA_VERSION_NUM == 501)
-extern "C" int luaopen_luabase_webclient(lua_State * L)
+LUNA_API int luaopen_luna_webclient(lua_State * L)
 {
 	if (luaL_newmetatable(L, LUA_WEB_CLIENT_MT))
 	{
@@ -548,7 +417,7 @@ extern "C" int luaopen_luabase_webclient(lua_State * L)
 	return 1;
 }
 #elif (LUA_VERSION_NUM == 502)
-extern "C" int luaopen_luabase_webclient(lua_State * L)
+LUNA_API int luaopen_luna_webclient(lua_State * L)
 {
 	luaL_checkversion(L);
 
