@@ -7,31 +7,23 @@ local WebClient = WebClientLib.Create(function (index, data)
     reqest.data = reqest.data .. data;
 end);
 
-local function FormatUrl(urlFormat, ...)
-    local tb = {...};
-    for i, v in ipairs(tb) do
-        tb[i] = WebClientLib.UrlEncoding(v);
-    end
-
-    return string.format(urlFormat, unpack(tb));    
-end
-
 function Lib.Request(session, source, url, get, post)
     if get then
-        url = url .. "?";
-        for k, v in ipairs(get) do
-            k = WebClientLib.UrlEncoding(k);
-            v = WebClientLib.UrlEncoding(v);
+        local i = 0;
+        for k, v in pairs(get) do
+            k = WebClient:UrlEncoding(k);
+            v = WebClient:UrlEncoding(v);
 
-            url = string.format("%s&%s=%s", url, k, v);
+            url = string.format("%s%s%s=%s", url, i == 0 and "?" or "&", k, v);
+            i = i + 1;
         end        
     end
 
     if post and type(post) == "table" then
         local data = {}
         for k,v in pairs(post) do
-            k = WebClientLib.UrlEncoding(k);
-            v = WebClientLib.UrlEncoding(v);
+            k = WebClient:UrlEncoding(k);
+            v = WebClient:UrlEncoding(v);
 
             table.insert(data, string.format("%s=%s", k, v));
         end   
@@ -49,10 +41,6 @@ function Lib.Request(session, source, url, get, post)
         session = session,
         address = source,
     };
-end
-
-function Lib.QueryProgressStatus(session, source, index)
-    Skynet.ret(Skynet.pack(WebClientLib.QueryProgressStatus(index)));
 end
 
 function Lib.Query()

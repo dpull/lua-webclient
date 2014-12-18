@@ -369,33 +369,6 @@ static int LuaRemoveRequest(lua_State* L)
     return 0;
 }
 
-static int LuaQueryProgressStatus(lua_State* L)
-{
-	CURLcode euRetCode = CURL_LAST;
-	CWebClient* pClient = GetWebClient(L, 1);
-	void* pIndex = lua_touserdata(L, 2);
-	double dwContentLen = 0.0f;
-	double dwDownloadLen = 0.0f;
-
-	if (!pClient)
-		return luaL_argerror(L, 1, "parameter self invalid");
-
-	if (!pIndex)
-		return luaL_argerror(L, 2, "parameter index invalid");
-
-	euRetCode = curl_easy_getinfo(pIndex, CURLINFO_SIZE_DOWNLOAD, &dwDownloadLen);
-	if (euRetCode != CURLE_OK)
-		return 0;
-
-	euRetCode = curl_easy_getinfo(pIndex, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &dwContentLen);
-	if (euRetCode != CURLE_OK)
-		return 0;
-
-	lua_pushnumber(L, dwDownloadLen);
-	lua_pushnumber(L, dwContentLen);
-	return 2;
-}
-
 static int LuaUrlEncoding(lua_State* L)
 {
     CLuaWebClient* pLuaClient = (CLuaWebClient*)luaL_checkudata(L, 1, LUA_WEB_CLIENT_MT);
@@ -406,7 +379,7 @@ static int LuaUrlEncoding(lua_State* L)
         pLuaClient->m_pUrlEncoding = curl_easy_init();
 
 	size_t uLen = 0;
-	const char* pszString = lua_tolstring(L, 1, &uLen);
+	const char* pszString = lua_tolstring(L, 2, &uLen);
 	char* pszResult = NULL;
 
 	pszResult = curl_easy_escape(pLuaClient->m_pUrlEncoding, pszString, uLen);
@@ -423,7 +396,6 @@ static int LuaUrlEncoding(lua_State* L)
 
 luaL_Reg WebClientCreateFuns[] = {
 	{ "Create", LuaCreate },
-	{ "UrlEncoding", LuaUrlEncoding },
 	{ NULL, NULL }
 };
 
@@ -432,7 +404,7 @@ luaL_Reg WebClientFuns[] = {
 	{ "Query", LuaQuery },
 	{ "Request", LuaRequest },
     { "RemoveRequest", LuaRemoveRequest },
-	{ "QueryProgressStatus", LuaQueryProgressStatus },
+    { "UrlEncoding", LuaUrlEncoding },
 	{ NULL, NULL }
 };
 
