@@ -8,7 +8,7 @@
     src/* 
         LuaWebClient的c++代码
 
-    example/webclient.lua 
+    example/webclient.lua （无时间维护，暂时删除掉）
         对C接口的简单封装，可用于游戏逻辑线程直接调用
 
     example/skynet_webclient.lua 
@@ -18,4 +18,3 @@
     
     curl
     lua（5.1， 5.2均可）
-
