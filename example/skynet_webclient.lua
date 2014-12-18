@@ -1,17 +1,13 @@
 local Skynet = require "skynet";
-WebClientLib = WebClientLib or require("luna.webclient")
-Downloads = Downloads or {}
-WebClient = WebClient or WebClientLib.Create(function (index, data)
-    local download = Downloads[index];
-    assert(download);
-
-    if download.type == "data" then
-        download.data = download.data .. data;
-    end
-end);
 local Lib = {};
+local WebClientLib = require("luna.webclient");
+local Requests = {};
+local WebClient = WebClientLib.Create(function (index, data)
+    local reqest = Requests[index];
+    reqest.data = reqest.data .. data;
+end);
 
-function FormatUrl(urlFormat, ...)
+local function FormatUrl(urlFormat, ...)
     local tb = {...};
     for i, v in ipairs(tb) do
         tb[i] = WebClientLib.UrlEncoding(v);
@@ -20,15 +16,34 @@ function FormatUrl(urlFormat, ...)
     return string.format(urlFormat, unpack(tb));    
 end
 
-function Lib.DownloadData(session, source, urlFormat, ...)
-    local url = FormatUrl(urlFormat, ...);
-    local index = WebClient:DownloadData(url);
+function Lib.Request(session, source, url, get, post)
+    if get then
+        url = url .. "?";
+        for k, v in ipairs(get) do
+            k = WebClientLib.UrlEncoding(k);
+            v = WebClientLib.UrlEncoding(v);
+
+            url = string.format("%s&%s=%s", url, k, v);
+        end        
+    end
+
+    if post and type(post) == "table" then
+        local data = {}
+        for k,v in pairs(post) do
+            k = WebClientLib.UrlEncoding(k);
+            v = WebClientLib.UrlEncoding(v);
+
+            table.insert(data, string.format("%s=%s", k, v));
+        end   
+        post = table.concat(data , "&");
+    end
+
+    local index = WebClient:Request(url, post);
     if not index then
         return Skynet.ret();
     end
 
-    Downloads[index] = {
-        type = "data", 
+    Requests[index] = {
         url = url, 
         data = "",
         session = session,
@@ -41,23 +56,30 @@ function Lib.QueryProgressStatus(session, source, index)
 end
 
 function Lib.Query()
-    local data = WebClient:Query();
-
-    for k, v in pairs(data) do
-        local para = Downloads[k];
-        if para then
-            local param, size;
-            if v.error then
-                param, size = Skynet.pack(v);
-            else
-                param, size = Skynet.pack({data = para.data});
-            end
-            Downloads[k] = nil;
+    for i = 1, 10000 do
+        local index, errmsg = WebClient:Query();
+        if not index then
+            break;
         end
+
+
+        local reqest = Requests[index];
+        if reqest then
+            local param, size;
+            if errmsg == nil or errmsg == "" then
+                param, size = Skynet.pack(true, reqest.data);
+            else
+                param, size = Skynet.pack(false, errmsg);
+            end 
+
+            Skynet.redirect(reqest.address, 0, Skynet.PTYPE_RESPONSE, reqest.session, param, size);
+            Requests[index] = nil;
+        end    
+        WebClient:RemoveRequest(index);
     end
 end
 
-function Query()
+local function Query()
     while true do
         Lib.Query();
         Skynet.sleep(1);
@@ -75,4 +97,11 @@ Skynet.start(function()
     end)
 
     Skynet.fork(Query);
+    Skynet.fork(function ()
+        while true do
+            local a = require("lib").CountTB(Requests);
+            print("Requests Count:" .. a)
+            Skynet.sleep(1000);
+        end        
+    end);
 end)

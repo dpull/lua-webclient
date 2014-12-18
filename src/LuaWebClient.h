@@ -24,17 +24,7 @@ THE SOFTWARE.
 
 #pragma once
 
-class CWebClient;
-struct CWebRequest
-{
-	void* m_pIndex;
-	char  m_szError[CURL_ERROR_SIZE];
-	char  m_szIP[16];
-	CWebClient* m_pWebClient;
-};
-
-typedef std::map<CURL*, CWebRequest*> CWebRequestTable;
-typedef std::list<CWebRequest*> CWebDataList;
+struct CWebRequest;
 typedef size_t CWebClientWriteCallback(char* pszBuffer, size_t uBlockSize, size_t uCount, void* pvArg);
 
 class CWebClient
@@ -46,17 +36,19 @@ public:
 public:
 	bool Setup(CWebClientWriteCallback* pCallback, void* pvUserData);
 	void Clear();
-	
-	CURLMcode Query(CWebDataList* pRetWebData);
 
-	void* Download(const char szUrl[]);
-
+    bool Query(void** pHandle, char** ppszError);
+	void* Request(const char szUrl[], const char* pPostData, size_t uPostDataLen);
+    void RemoveRequest(void* pHandle);
+    
 	const void* GetUserData() { return m_pvUserData; }
 
 private:
-	static size_t OnWebDataCallback(void* pvData, size_t uBlock, size_t uCount, void* pvArg);
-
+    bool RealQuery(void** pHandle, char** ppszError);
+    
 private:
+    typedef std::map<CURL*, CWebRequest*> CWebRequestTable;
+    
 	CWebRequestTable			m_WebRequestTable;
 	CURLM*						m_pCurlMHandle;
 	CWebClientWriteCallback*	m_pCallback;
