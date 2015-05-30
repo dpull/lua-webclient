@@ -38,8 +38,7 @@ function Lib.Request(session, source, url, get, post)
     Requests[index] = {
         url = url, 
         data = "",
-        session = session,
-        address = source,
+        response = Skynet.response(),
     };
 end
 
@@ -50,18 +49,16 @@ function Lib.Query()
             break;
         end
 
-
         local reqest = Requests[index];
         if reqest then
+            Requests[index] = nil;
+
             local param, size;
             if errmsg == nil or errmsg == "" then
-                param, size = Skynet.pack(true, reqest.data);
+                reqest.response(true, true, reqest.data);
             else
-                param, size = Skynet.pack(false, errmsg);
+                reqest.response(true, false, errmsg);
             end 
-
-            Skynet.redirect(reqest.address, 0, Skynet.PTYPE_RESPONSE, reqest.session, param, size);
-            Requests[index] = nil;
         end    
         WebClient:RemoveRequest(index);
     end
@@ -85,11 +82,4 @@ Skynet.start(function()
     end)
 
     Skynet.fork(Query);
-    Skynet.fork(function ()
-        while true do
-            local a = require("lib").CountTB(Requests);
-            print("Requests Count:" .. a)
-            Skynet.sleep(1000);
-        end        
-    end);
 end)

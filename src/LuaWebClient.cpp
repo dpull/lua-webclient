@@ -22,14 +22,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ****************************************************************************/
 
-#include "ToolMacros.h"
-#include "string.h"
-#include "lua.hpp"
+#include <string.h>
 #include <curl/curl.h>
 #include <algorithm> 
 #include <map>
 #include <list>
 #include <assert.h>  
+#include "ToolMacros.h"
+#include "lua.hpp"
 #include "LuaWebClient.h"
 
 #ifdef _MSC_VER
@@ -382,7 +382,7 @@ static int LuaUrlEncoding(lua_State* L)
 	const char* pszString = lua_tolstring(L, 2, &uLen);
 	char* pszResult = NULL;
 
-	pszResult = curl_easy_escape(pLuaClient->m_pUrlEncoding, pszString, uLen);
+	pszResult = curl_easy_escape(pLuaClient->m_pUrlEncoding, pszString, (int)uLen);
 	if (!pszResult)
     {
         lua_pushlstring(L, pszString, uLen);

@@ -32,9 +32,7 @@ enum LogType
 	eLogDebug
 };
 
-#ifndef _USE_CUSTOM_LOG
-#define Log(eLevel, cszFormat, ...)	fprintf(stderr, cszFormat, ##__VA_ARGS__)	  
-#endif
+extern void Log(LogType type, const char cszFormat[], ...);
 
 #ifdef _MSC_VER
     #define __THIS_FUNCTION__   __FUNCTION__
@@ -165,13 +163,23 @@ enum LogType
 // 用来取代MS的MAKELONG,MAKEWORD
 #define MAKE_DWORD(a, b)      ((DWORD)(((WORD)(((DWORD)(a)) & 0xffff)) | ((DWORD)((WORD)(((DWORD)(b)) & 0xffff))) << 16))
 #define MAKE_WORD(a, b)      ((WORD)(((BYTE)(((DWORD)(a)) & 0xff)) | ((WORD)((BYTE)(((DWORD)(b)) & 0xff))) << 8))
-#define _countof(_Array) (sizeof(_Array) / sizeof(_Array[0]))
 
-#if defined(__linux) || defined(__APPLE__)
-    #define LOWORD(l)           ((WORD)(((DWORD)(l)) & 0xffff))
-    #define HIWORD(l)           ((WORD)((((DWORD)(l)) >> 16) & 0xffff))
-    #define LOBYTE(w)           ((BYTE)(((DWORD)(w)) & 0xff))
-    #define HIBYTE(w)           ((BYTE)((((DWORD)(w)) >> 8) & 0xff))
+#ifdef _MSC_VER
+#include "PlatformWindows.h"
 #endif
 
-typedef unsigned char       BYTE;
+#ifdef __linux
+#include "PlatformLinux.h"
+#endif
+
+#ifdef __APPLE__
+#include "PlatformApple.h"
+#endif
+
+inline bool HasUtf8BomHeader(const char* pszText)
+{
+    if (pszText[0] == (char)0xEF && pszText[1] == (char)0xBB && pszText[2] == (char)0xBF)
+        return true;
+    
+    return false;
+}    
