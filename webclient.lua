@@ -42,11 +42,11 @@ end
 --- 请求某个url
 -- @function request
 -- @string url url
--- @tab[opt] get get
--- @param[opt] post table or string
--- @bool noReply 
+-- @tab[opt] get get的参数
+-- @param[opt] post post参数，table or string类型 
+-- @bool[opt] no_reply 使用skynet.call则要设置为nil或false，使用skynet.send则要设置为true
 -- @usage skynet.call(webclient, "lua", "request", "http://www.dpull.com") or skynet.send(webclient, "lua", "request", "http://www.dpull.com", nil, nil, true)
-local function request(url, get, post, noReply)
+local function request(url, get, post, no_reply)
     if get then
         local i = 0;
         for k, v in pairs(get) do
@@ -76,7 +76,7 @@ local function request(url, get, post, noReply)
     assert(key);
 
     local response = nil;
-    if not noReply then
+    if not no_reply then
         response = skynet.response();
     end
 
