@@ -1,9 +1,7 @@
-# webclient
+# lua-webclient
 
-非堵塞的lua http库，是对curlm的简单封装。
-可用于大量http、https请求在单线程内处理，如游戏服务器和渠道进行用户的账户密码验证。
-
-webclient 是 [herocode](https://bitbucket.org/beings/herocode) 的子集
+非堵塞的lua http库，是对libcurl multi interface（curlm）的简单封装。
+可用于大量http、https请求在单线程内非阻塞处理，如游戏服务器和渠道进行用户的账户密码验证。
 
 ## 文件说明
 
