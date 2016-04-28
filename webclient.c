@@ -140,7 +140,13 @@ static size_t write_callback(char* buffer, size_t block_size, size_t count, void
         webrequest->content_maxlength = MAX(webrequest->content_maxlength, webrequest->content_length + length);
         webrequest->content_maxlength = MAX(webrequest->content_maxlength, 512);
         webrequest->content_maxlength = 2 * webrequest->content_maxlength;
-        webrequest->content = (char*)realloc(webrequest->content, webrequest->content_maxlength);
+
+        void* new_content = (char*)realloc(webrequest->content, webrequest->content_maxlength);
+        if (!new_content) {
+            strncpy(webrequest->error, "not enough memory.", sizeof(webrequest->error));
+            return length;
+        }
+        webrequest->content = new_content;
     }
     
     memcpy(webrequest->content + webrequest->content_length, buffer, length);
