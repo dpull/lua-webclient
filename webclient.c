@@ -62,6 +62,7 @@ static int webclient_create(lua_State* l)
     
     struct webclient* webclient = (struct webclient*)lua_newuserdata(l, sizeof(*webclient));
     webclient->curlm = curlm;
+    webclient->encoding_curl = NULL;
  
     luaL_getmetatable(l, LUA_WEB_CLIENT_MT);
     lua_setmetatable(l, -2);
