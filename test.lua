@@ -1,4 +1,4 @@
-local webclientlib = require 'luna.webclient'
+local webclientlib = require 'webclient'
 local webclient = webclientlib.create()
 
 local urls = {

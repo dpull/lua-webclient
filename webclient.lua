@@ -4,7 +4,7 @@
 -- @usage local webclient = skynet.newservice("webclient")
 
 local skynet = require "skynet"
-local webclientlib = require "luna.webclient"
+local webclientlib = require "webclient"
 local logger = require "log"
 local webclient = webclientlib.create()
 local requests = nil

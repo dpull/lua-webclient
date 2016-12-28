@@ -345,7 +345,7 @@ luaL_Reg webclient_funs[] = {
     { NULL, NULL }
 };
 
-int luaopen_luna_webclient(lua_State * L)
+int luaopen_webclient(lua_State * L)
 {
     luaL_checkversion(L);
     if (luaL_newmetatable(L, LUA_WEB_CLIENT_MT))
