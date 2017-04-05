@@ -14,11 +14,16 @@ local function resopnd(request)
         return
     end
 
-    local content, errmsg = webclient:get_respond(request.req)
+    local content, errmsg = webclient:get_respond(request.req)  
     if not errmsg then
         request.response(true, true, content)
     else
-        request.response(true, false, errmsg)
+        local info = webclient:get_info(request.req) 
+        if info.response_code == 200 and not info.content_save_failed then
+            request.response(true, true, content, errmsg)
+        else
+            request.response(true, false, errmsg, info)
+        end
     end
 end
 

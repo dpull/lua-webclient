@@ -49,6 +49,7 @@ struct webrequest
     char* content;
     size_t content_length;
     size_t content_maxlength;
+    bool content_realloc_failed;
 };
 
 static int webclient_create(lua_State* l)
@@ -134,7 +135,7 @@ static size_t write_callback(char* buffer, size_t block_size, size_t count, void
     assert(webrequest);
     
     size_t length = block_size * count;
-    if (webrequest->error[0] != '\0')
+    if (webrequest->content_realloc_failed)
         return length;
     
     if (webrequest->content_length + length > webrequest->content_maxlength) {
@@ -144,7 +145,7 @@ static size_t write_callback(char* buffer, size_t block_size, size_t count, void
 
         void* new_content = (char*)realloc(webrequest->content, webrequest->content_maxlength);
         if (!new_content) {
-            strncpy(webrequest->error, "not enough memory.", sizeof(webrequest->error));
+            webrequest->content_realloc_failed = true;
             return length;
         }
         webrequest->content = new_content;
@@ -235,7 +236,7 @@ static int webclient_removerequest(lua_State* l)
     struct webrequest* webrequest = (struct webrequest*)lua_touserdata(l, 2);
     if (!webrequest)
         return luaL_argerror(l, 2, "parameter index invalid");
-    
+
     curl_multi_remove_handle(webclient->curlm, webrequest->curl);
     curl_easy_cleanup(webrequest->curl);
     if (webrequest->content)
@@ -254,12 +255,16 @@ static int webclient_getrespond(lua_State* l)
     if (!webrequest)
         return luaL_argerror(l, 2, "parameter index invalid");
     
+    if (webrequest->content_realloc_failed) {
+        strncpy(webrequest->error, "not enough memory.", sizeof(webrequest->error));
+    }
+    
     if (webrequest->error[0] == '\0') {
         lua_pushlstring(l, webrequest->content, webrequest->content_length);
         return 1;
     }
 
-    lua_pushnil(l);
+    lua_pushlstring(l, webrequest->content, webrequest->content_length);
     lua_pushstring(l, webrequest->error);
     return 2;
 }
@@ -303,7 +308,12 @@ static int webclient_getinfo(lua_State* l)
         lua_pushinteger(l, response_code);
         lua_settable(l, -3);
     }
-
+    
+    if (webrequest->content_realloc_failed) {
+        lua_pushstring(l, "content_save_failed");
+        lua_pushboolean(l, webrequest->content_realloc_failed);
+        lua_settable(l, -3);
+    }
     return 1;
 }
 
