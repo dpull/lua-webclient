@@ -15,6 +15,12 @@ for i, v in ipairs(urls) do
 	assert(req)
 	assert(key)
 	requests[key] = {req, v}
+
+    webclient:set_httpheader(req, "User-Agent: dpull", [[If-None-Match:"573dff7cd86a737f0fd9ecc862aed14f"]])
+
+    if i == 1 then
+        webclient:debug(req, true)
+    end
 end
 
 while next(requests) do

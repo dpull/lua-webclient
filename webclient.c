@@ -45,6 +45,7 @@ struct webclient
 struct webrequest
 {
     CURL* curl;
+    struct curl_slist* header;
     char error[CURL_ERROR_SIZE];
     char* content;
     size_t content_length;
@@ -239,6 +240,7 @@ static int webclient_removerequest(lua_State* l)
 
     curl_multi_remove_handle(webclient->curlm, webrequest->curl);
     curl_easy_cleanup(webrequest->curl);
+    curl_slist_free_all(webrequest->header);
     if (webrequest->content)
         free(webrequest->content);
     free(webrequest);
@@ -317,6 +319,43 @@ static int webclient_getinfo(lua_State* l)
     return 1;
 }
 
+static int webclient_sethttpheader(lua_State* l)
+{
+    struct webclient* webclient = (struct webclient*)luaL_checkudata(l, 1, LUA_WEB_CLIENT_MT);
+    if (!webclient)
+        return luaL_argerror(l, 1, "parameter self invalid");
+    
+    struct webrequest* webrequest = (struct webrequest*)lua_touserdata(l, 2);
+    if (!webrequest)
+        return luaL_argerror(l, 2, "parameter index invalid");
+    
+    int top = lua_gettop(l);
+    for (int i = 3; i <= top; ++i) {
+        const char* str = lua_tostring(l, i);
+        webrequest->header = curl_slist_append(webrequest->header, str);
+    }
+    
+    if (webrequest->header) {
+        curl_easy_setopt(webrequest->curl, CURLOPT_HTTPHEADER, webrequest->header);
+    }
+    return 0;
+}
+
+static int webclient_debug(lua_State* l)
+{
+    struct webclient* webclient = (struct webclient*)luaL_checkudata(l, 1, LUA_WEB_CLIENT_MT);
+    if (!webclient)
+        return luaL_argerror(l, 1, "parameter self invalid");
+    
+    struct webrequest* webrequest = (struct webrequest*)lua_touserdata(l, 2);
+    if (!webrequest)
+        return luaL_argerror(l, 2, "parameter index invalid");
+    
+    int enable = lua_toboolean(l, 3);
+    curl_easy_setopt(webrequest->curl, CURLOPT_VERBOSE, enable ? 1L : 0L);
+    return 0;
+}
+
 static int url_encoding(lua_State* l)
 {
     struct webclient* webclient = (struct webclient*)luaL_checkudata(l, 1, LUA_WEB_CLIENT_MT);
@@ -351,7 +390,10 @@ luaL_Reg webclient_funs[] = {
     { "remove_request", webclient_removerequest },
     { "get_respond", webclient_getrespond },
     { "get_info", webclient_getinfo },
+    { "set_httpheader", webclient_sethttpheader },
+    { "debug", webclient_debug },
     { "url_encoding", url_encoding },
+    
     { NULL, NULL }
 };
 
