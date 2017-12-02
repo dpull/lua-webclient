@@ -182,7 +182,7 @@ static struct webrequest* webclient_realrequest(struct webclient* webclient, con
     
     if (postdata) {
         curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, (long)postdatalen);
-        curl_easy_setopt(handle, CURLOPT_POSTFIELDS, postdata);
+        curl_easy_setopt(handle, CURLOPT_COPYPOSTFIELDS, postdata);
     }
     
     if (curl_multi_add_handle(webclient->curlm, handle) == CURLM_OK) {
