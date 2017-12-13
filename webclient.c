@@ -153,7 +153,7 @@ static size_t write_callback(char* buffer, size_t block_size, size_t count, void
             webrequest->content_realloc_failed = true;
             return length;
         }
-        webrequest->content = new_content;
+        webrequest->content = (char *) new_content;
     }
     
     memcpy(webrequest->content + webrequest->content_length, buffer, length);
