@@ -94,8 +94,7 @@ static int webclient_destory(lua_State* l)
 
 static CURL* webclient_realquery(struct webclient* webclient)
 {
-    while (true)
-    {
+    while (true) {
         int msgs_in_queue;
         CURLMsg* curlmsg = curl_multi_info_read(webclient->curlm, &msgs_in_queue);
         if (!curlmsg)
@@ -405,8 +404,7 @@ int luaopen_webclient(lua_State * L)
 {
     luaL_checkversion(L);
     
-    if (luaL_newmetatable(L, LUA_WEB_CLIENT_MT))
-    {
+    if (luaL_newmetatable(L, LUA_WEB_CLIENT_MT)) {
         lua_pushvalue(L, -1);
         lua_setfield(L, -2, "__index");
         luaL_setfuncs(L, webclient_funs, 0);
