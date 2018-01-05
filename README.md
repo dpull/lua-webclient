@@ -16,4 +16,4 @@
 		
 ## 如何接入skynet
 
-[参考makefile](https://github.com/dpull/lua-webclient/issues/13) 感谢 @peigongdh 
+[参考makefile](https://github.com/dpull/lua-webclient/issues/13) 感谢 [@peigongdh](https://github.com/peigongdh) 
