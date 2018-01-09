@@ -327,17 +327,18 @@ static int webclient_sethttpheader(lua_State* l)
     struct webclient* webclient = (struct webclient*)luaL_checkudata(l, 1, LUA_WEB_CLIENT_MT);
     if (!webclient)
         return luaL_argerror(l, 1, "parameter self invalid");
-    
+
     struct webrequest* webrequest = (struct webrequest*)lua_touserdata(l, 2);
     if (!webrequest)
         return luaL_argerror(l, 2, "parameter index invalid");
-    
+
+    int i;
     int top = lua_gettop(l);
-    for (int i = 3; i <= top; ++i) {
+    for (i = 3; i <= top; ++i) {
         const char* str = lua_tostring(l, i);
         webrequest->header = curl_slist_append(webrequest->header, str);
     }
-    
+
     if (webrequest->header) {
         curl_easy_setopt(webrequest->curl, CURLOPT_HTTPHEADER, webrequest->header);
     }
