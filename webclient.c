@@ -45,7 +45,8 @@ struct webclient
 struct webrequest
 {
     CURL* curl;
-    struct curl_slist* header;
+	struct curl_slist* header;
+	struct curl_httppost* http_post;
     char error[CURL_ERROR_SIZE];
     char* content;
     size_t content_length;
@@ -92,7 +93,7 @@ static int webclient_destory(lua_State* l)
     return 0;
 }
 
-static CURL* webclient_realquery(struct webclient* webclient)
+static CURL* webclient_realquery(struct webclient* webclient, CURLcode* ret_result)
 {
     while (true) {
         int msgs_in_queue;
@@ -103,6 +104,7 @@ static CURL* webclient_realquery(struct webclient* webclient)
         if (curlmsg->msg != CURLMSG_DONE)
             continue;
         
+		*ret_result = curlmsg->data.result;
         return curlmsg->easy_handle;
     }
 }
@@ -113,22 +115,25 @@ static int webclient_query(lua_State* l)
     if (!webclient)
         return luaL_argerror(l, 1, "parameter self invalid");
     
-    CURL* handle = webclient_realquery(webclient);
+	CURLcode handle_result;
+    CURL* handle = webclient_realquery(webclient, &handle_result);
     if (handle) {
-        lua_pushlightuserdata(l, handle);
-        return 1;
+		lua_pushlightuserdata(l, handle);
+		lua_pushinteger(l, handle_result);
+		return 2;
     }
     
     int running_handles;
-    CURLMcode euRetCode = curl_multi_perform(webclient->curlm, &running_handles);
-    if (euRetCode != CURLM_OK && euRetCode != CURLM_CALL_MULTI_PERFORM) {
+    CURLMcode perform_result = curl_multi_perform(webclient->curlm, &running_handles);
+    if (perform_result != CURLM_OK && perform_result != CURLM_CALL_MULTI_PERFORM) {
         return luaL_error(l, "webclient query failed");
     }
     
-    handle = webclient_realquery(webclient);
+    handle = webclient_realquery(webclient, &handle_result);
     if (handle) {
-        lua_pushlightuserdata(l, handle);
-        return 1;
+		lua_pushlightuserdata(l, handle);
+		lua_pushinteger(l, handle_result);
+        return 2;
     }
     return 0;
 }
@@ -160,7 +165,7 @@ static size_t write_callback(char* buffer, size_t block_size, size_t count, void
     return length;
 }
 
-static struct webrequest* webclient_realrequest(struct webclient* webclient, const char* url, const char* postdata, size_t postdatalen, long connect_timeout_ms)
+static struct webrequest* webclient_realrequest(struct webclient* webclient, const char* url, struct curl_httppost* http_post, const char* post_field, size_t post_field_len, long connect_timeout_ms)
 {
     struct webrequest* webrequest = (struct webrequest*)malloc(sizeof(*webrequest));
     memset(webrequest, 0, sizeof(*webrequest));
@@ -178,10 +183,13 @@ static struct webrequest* webclient_realrequest(struct webclient* webclient, con
     curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, webrequest->error);
     curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT_MS, connect_timeout_ms);
     curl_easy_setopt(handle, CURLOPT_URL, url);
-    
-    if (postdata) {
-        curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, (long)postdatalen);
-        curl_easy_setopt(handle, CURLOPT_COPYPOSTFIELDS, postdata);
+
+	if (http_post) {
+		webrequest->http_post = http_post;
+		curl_easy_setopt(handle, CURLOPT_HTTPPOST, webrequest->http_post);
+	} else if (post_field) {
+        curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, (long)post_field_len);
+        curl_easy_setopt(handle, CURLOPT_COPYPOSTFIELDS, post_field);
     }
     
     if (curl_multi_add_handle(webclient->curlm, handle) == CURLM_OK) {
@@ -198,6 +206,75 @@ failed:
     return NULL;
 }
 
+static struct curl_httppost* webclient_tohttppost(lua_State* l, int index)
+{
+	const int forms_max_index = 7;
+	struct curl_forms forms[forms_max_index + 1];
+
+	int formadd_failed = false;
+	struct curl_httppost* firstitem = NULL;
+	struct curl_httppost* lastitem = NULL;
+
+	lua_pushnil(l);
+	while (!formadd_failed && lua_next(l, index)) {
+		int forms_index = 0;
+
+		lua_pushnil(l);
+		while (forms_index < forms_max_index && lua_next(l, -2)) {
+			lua_pushvalue(l, -2); 
+
+			const char* key = lua_tostring(l, -1);
+			size_t value_length = 0;
+			const char* value = lua_tolstring(l, -2, &value_length);
+
+			if (strcmp(key, "name") == 0) {
+				forms[forms_index].option = CURLFORM_COPYNAME;
+				forms[forms_index].value = value;
+				forms_index++;
+			} 
+			else if (strcmp(key, "contents") == 0) {
+				forms[forms_index].option = CURLFORM_COPYCONTENTS;
+				forms[forms_index].value = value;
+				forms_index++;
+
+				forms[forms_index].option = CURLFORM_CONTENTSLENGTH;
+				forms[forms_index].value = (const char*)value_length;
+				forms_index++;
+			}
+			else if (strcmp(key, "file") == 0) {
+				forms[forms_index].option = CURLFORM_FILE;
+				forms[forms_index].value = value;
+				forms_index++;
+			}
+			else if (strcmp(key, "content_type") == 0) {
+				forms[forms_index].option = CURLFORM_CONTENTTYPE;
+				forms[forms_index].value = value;
+				forms_index++;
+			}
+			else if (strcmp(key, "filename") == 0) {
+				forms[forms_index].option = CURLFORM_FILENAME;
+				forms[forms_index].value = value;
+				forms_index++;
+			}
+			lua_pop(l, 2);
+		}
+		lua_pop(l, 1);
+
+		forms[forms_index].option = CURLFORM_END;
+		CURLFORMcode result = curl_formadd(&firstitem, &lastitem, CURLFORM_ARRAY, forms, CURLFORM_END);
+		if (result != 0) {
+			formadd_failed = true;
+			break;
+		}
+	}
+
+	if (formadd_failed) {
+		curl_formfree(firstitem);
+		return NULL;
+	}
+	return firstitem;
+}
+
 static int webclient_request(lua_State* l)
 {
     struct webclient* webclient = (struct webclient*)luaL_checkudata(l, 1, LUA_WEB_CLIENT_MT);
@@ -208,21 +285,28 @@ static int webclient_request(lua_State* l)
     if (!url)
         return luaL_argerror(l, 2, "parameter url invalid");
     
+	struct curl_httppost* http_post = NULL;
     const char* postdata = NULL;
     size_t postdatalen = 0;
     long connect_timeout_ms = 5000;
     
     int top = lua_gettop(l);
-    if (top > 2 && lua_isstring(l, 3)) 
-        postdata = lua_tolstring(l, 3, &postdatalen);
-    
+	if (top > 2 && lua_istable(l, 3)) {
+		http_post = webclient_tohttppost(l, 3);
+		if (!http_post)
+			return luaL_argerror(l, 2, "parameter post_form invalid");
+	}
+    else if (top > 2 && lua_isstring(l, 3)) {
+		postdata = lua_tolstring(l, 3, &postdatalen);
+    }
+
     if (top > 3 && lua_isnumber(l, 4)) {
-        connect_timeout_ms = lua_tointeger(l, 4);
+        connect_timeout_ms = (long)lua_tointeger(l, 4);
         if (connect_timeout_ms < 0)
             return luaL_argerror(l, 4, "parameter connect_timeout_ms invalid");
     }
     
-    struct webrequest* webrequest = webclient_realrequest(webclient, url, postdata, postdatalen, connect_timeout_ms);
+    struct webrequest* webrequest = webclient_realrequest(webclient, url, http_post, postdata, postdatalen, connect_timeout_ms);
     if (!webrequest)
         return 0;
     
@@ -244,6 +328,7 @@ static int webclient_removerequest(lua_State* l)
     curl_multi_remove_handle(webclient->curlm, webrequest->curl);
     curl_easy_cleanup(webrequest->curl);
     curl_slist_free_all(webrequest->header);
+	curl_formfree(webrequest->http_post);
     if (webrequest->content)
         free(webrequest->content);
     free(webrequest);
@@ -322,6 +407,32 @@ static int webclient_getinfo(lua_State* l)
     return 1;
 }
 
+static int webclient_getprogress(lua_State* l)
+{
+	struct webclient* webclient = (struct webclient*)luaL_checkudata(l, 1, LUA_WEB_CLIENT_MT);
+	if (!webclient)
+		return luaL_argerror(l, 1, "parameter self invalid");
+
+	struct webrequest* webrequest = (struct webrequest*)lua_touserdata(l, 2);
+	if (!webrequest)
+		return luaL_argerror(l, 2, "parameter index invalid");
+
+	double download_length = 0.0f;
+	double content_length = 0.0f;
+
+	CURLcode ret = curl_easy_getinfo(webrequest->curl, CURLINFO_SIZE_DOWNLOAD, &download_length);
+	if (ret != CURLE_OK)
+		return 0;
+
+	ret = curl_easy_getinfo(webrequest->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &content_length);
+	if (ret != CURLE_OK)
+		return 0;
+
+	lua_pushnumber(l, download_length);
+	lua_pushnumber(l, content_length);
+	return 2;
+}
+
 static int webclient_sethttpheader(lua_State* l)
 {
     struct webclient* webclient = (struct webclient*)luaL_checkudata(l, 1, LUA_WEB_CLIENT_MT);
@@ -393,25 +504,43 @@ luaL_Reg webclient_funs[] = {
     { "request", webclient_request },
     { "remove_request", webclient_removerequest },
     { "get_respond", webclient_getrespond },
-    { "get_info", webclient_getinfo },
-    { "set_httpheader", webclient_sethttpheader },
+	{ "get_info", webclient_getinfo },
+	{ "get_progress", webclient_getprogress },
+	{ "set_httpheader", webclient_sethttpheader },
     { "debug", webclient_debug },
     { "url_encoding", url_encoding },
     
     { NULL, NULL }
 };
 
+#if (LUA_VERSION_NUM == 501) 
 int luaopen_webclient(lua_State * L)
 {
-    luaL_checkversion(L);
-    
-    if (luaL_newmetatable(L, LUA_WEB_CLIENT_MT)) {
-        lua_pushvalue(L, -1);
-        lua_setfield(L, -2, "__index");
-        luaL_setfuncs(L, webclient_funs, 0);
-        lua_pop(L, 1);
-    }
-    
-    luaL_newlib(L, webclient_createfuns);
-    return 1;
+	if (luaL_newmetatable(L, LUA_WEB_CLIENT_MT)) {
+		luaL_register(L, NULL, webclient_funs);
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+		lua_pop(L, 1);
+	}
+
+	luaL_register(L, "webclient", webclient_createfuns);
+	return 1;
 }
+#elif (LUA_VERSION_NUM >= 502)
+int luaopen_webclient(lua_State * L)
+{
+	luaL_checkversion(L);
+
+	if (luaL_newmetatable(L, LUA_WEB_CLIENT_MT)) {
+		lua_pushvalue(L, -1);
+		lua_setfield(L, -2, "__index");
+		luaL_setfuncs(L, webclient_funs, 0);
+		lua_pop(L, 1);
+	}
+
+	luaL_newlib(L, webclient_createfuns);
+	return 1;
+}
+#endif
+
+
