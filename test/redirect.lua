@@ -11,7 +11,7 @@ requests[key] = req
 local req, key = webclient:request("http://httpbin.org/absolute-redirect/6") --302
 requests[key] = req
 
-local req, key = webclient:request("http://httpbin.org/redirect-to?url=http%3A%2F%2Fhttpbin.org%2Fget&status_code=307") --307
+local req, key = webclient:request("http://httpbin.org/redirect-to?status_code=307&url=" .. webclient:url_encoding("http://httpbin.org/get")) --307
 requests[key] = req
 
 while next(requests) do

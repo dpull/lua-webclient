@@ -5,7 +5,7 @@ local requests = {};
 
 local requests = {}
 
-local req, key = webclient:request("http://httpbin.org/anything?a=1&b=2", "c=3&d=4", 5000) -- connect timeout 5000 ms
+local req, key = webclient:request("http://httpbin.org/anything?a=1&b=2", "c=3&d=4&e=" .. webclient:url_encoding("http://httpbin.org/"), 5000) -- connect timeout 5000 ms
 webclient:set_httpheader(req, "User-Agent: dpull", [[If-None-Match:"573dff7cd86a737f0fd9ecc862aed14f"]])
 webclient:debug(req, true)
 
@@ -25,5 +25,8 @@ while next(requests) do
         print("info", info.ip, info.port, info.content_length, info.response_code)
 		
 		webclient:remove_request(req)
+	else
+		local down, total = webclient:get_progress(req)
+		-- print("progress", down, total)
 	end
 end
