@@ -19,7 +19,7 @@
 * linux or mac `cmake ../` 
 * windows `cmake -G "Visual Studio 15 2017" ../` 
 
-## Useage
+## Usage
 
 [example.lua](https://github.com/dpull/lua-webclient/blob/master/test/example.lua)
 		
