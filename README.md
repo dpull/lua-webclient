@@ -18,6 +18,10 @@
 
 * linux or mac `cmake ../` 
 * windows `cmake -G "Visual Studio 15 2017" ../` 
+
+## Useage
+
+[example.lua](https://github.com/dpull/lua-webclient/blob/master/test/example.lua)
 		
 ## 如何接入skynet
 
