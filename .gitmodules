@@ -1,0 +1,6 @@
+[submodule "3rd/curl"]
+	path = 3rd/curl
+	url = https://github.com/curl/curl.git
+[submodule "3rd/lua"]
+	path = 3rd/lua
+	url = https://github.com/lua/lua.git

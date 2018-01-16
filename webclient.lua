@@ -8,32 +8,30 @@ local webclientlib = require "webclient"
 local webclient = webclientlib.create()
 local requests = nil
 
-local function resopnd(request)
+local function resopnd(request, result)
     if not request.response then
         return
     end
 
-    local content, errmsg = webclient:get_respond(request.req)  
-    if not errmsg then
-        request.response(true, true, content)
+    local content, errmsg = webclient:get_respond(request.req) 
+    local info = webclient:get_info(request.req) 
+     
+    if result == 0 then
+        request.response(true, true, content, info)
     else
         local info = webclient:get_info(request.req) 
-        if info.response_code == 200 and not info.content_save_failed then
-            request.response(true, true, content, errmsg)
-        else
-            request.response(true, false, errmsg, info)
-        end
+        request.response(true, false, errmsg, info)
     end
 end
 
 local function query()
     while next(requests) do
-        local finish_key = webclient:query()
+        local finish_key, result = webclient:query()
         if finish_key then
             local request = requests[finish_key];
             assert(request)
 
-            xpcall(resopnd, function() skynet.error(debug.traceback()) end, request)
+            xpcall(resopnd, function() skynet.error(debug.traceback()) end, request, result)
 
             webclient:remove_request(request.req)
             requests[finish_key] = nil
@@ -47,11 +45,11 @@ end
 --- 请求某个url
 -- @function request
 -- @string url url
--- @tab[opt] get get的参数
+-- @tab[opt] get get的参�?
 -- @param[opt] post post参数，table or string类型 
 -- @bool[opt] no_reply 使用skynet.call则要设置为nil或false，使用skynet.send则要设置为true
 -- @treturn bool 请求是否成功
--- @treturn string 当成功时，返回内容，当失败时，返回出错原因 
+-- @treturn string 当成功时，返回内容，当失败时，返回出错原�? 
 -- @usage skynet.call(webclient, "lua", "request", "http://www.dpull.com")
 -- @usage skynet.send(webclient, "lua", "request", "http://www.dpull.com", nil, nil, true)
 local function request(url, get, post, no_reply)

@@ -208,8 +208,8 @@ failed:
 
 static struct curl_httppost* webclient_tohttppost(lua_State* l, int index)
 {
-	enum {forms_max_index = 7};    
-	struct curl_forms forms[forms_max_index + 1];
+    const int forms_max_index = 7;
+    struct curl_forms forms[forms_max_index + 1];
 
     int formadd_failed = false;
     struct curl_httppost* firstitem = NULL;
@@ -262,7 +262,7 @@ static struct curl_httppost* webclient_tohttppost(lua_State* l, int index)
 
         forms[forms_index].option = CURLFORM_END;
         CURLFORMcode result = curl_formadd(&firstitem, &lastitem, CURLFORM_ARRAY, forms, CURLFORM_END);
-        if (result != CURL_FORMADD_OK) {
+        if (result != 0) {
             formadd_failed = true;
             break;
         }

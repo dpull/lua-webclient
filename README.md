@@ -8,11 +8,11 @@
 	webclient.c 
 		webclient 对curlm的封装
 		
-	webclient.lua
-		webclient 在 skynet 中的简单应用
-		
-	test.lua
+	test/
 		webclient 使用纯lua的示例
+
+	webclient.lua
+		webclient 在 skynet 中的简单应用	
 		
 ## 如何接入skynet
 
