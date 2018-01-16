@@ -22,7 +22,7 @@ while next(requests) do
 		print("respond", result, content, errmsg)
 		
 		local info = webclient:get_info(req)
-        print("info", info.ip, info.port, info.content_length, info.response_code)
+		print("info", info.ip, info.port, info.content_length, info.response_code)
 		
 		webclient:remove_request(req)
 	end
