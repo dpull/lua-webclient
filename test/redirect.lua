@@ -5,10 +5,13 @@ local requests = {};
 
 local requests = {}
 
-local req, key = webclient:request("http://httpbin.org/anything?a=1&b=2", "c=3&d=4", 5000) -- connect timeout 5000 ms
-webclient:set_httpheader(req, "User-Agent: dpull", [[If-None-Match:"573dff7cd86a737f0fd9ecc862aed14f"]])
-webclient:debug(req, true)
+local req, key = webclient:request("http://httpbin.org/relative-redirect/6") --302
+requests[key] = req
 
+local req, key = webclient:request("http://httpbin.org/absolute-redirect/6") --302
+requests[key] = req
+
+local req, key = webclient:request("http://httpbin.org/redirect-to?url=http%3A%2F%2Fhttpbin.org%2Fget&status_code=307") --307
 requests[key] = req
 
 while next(requests) do
@@ -18,12 +21,15 @@ while next(requests) do
 		assert(req)
 		requests[finish_key] = nil
 	
+		assert(result == 0)
+	
 		local content, errmsg = webclient:get_respond(req)
-		print("respond", result, content, errmsg)
+		local data = json.decode(content)
+
+		assert(data.url == "http://httpbin.org/get")
 		
 		local info = webclient:get_info(req)
-        print("info", info.ip, info.port, info.content_length, info.response_code)
-		
+		assert(info.response_code == 200)
 		webclient:remove_request(req)
 	end
 end
