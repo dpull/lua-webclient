@@ -33,7 +33,7 @@ THE SOFTWARE.
 
 #define IP_LENGTH               16
 #define MAX(a, b)               (((a) > (b)) ? (a) : (b))
-#define LUA_WEB_CLIENT_MT		("com.dpull.lib.WebClientMT")
+#define LUA_WEB_CLIENT_MT       ("com.dpull.lib.WebClientMT")
 #define ENABLE_FOLLOWLOCATION   1
 
 struct webclient
