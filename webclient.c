@@ -294,7 +294,7 @@ static int webclient_request(lua_State* l)
     if (top > 2 && lua_istable(l, 3)) {
         http_post = webclient_tohttppost(l, 3);
         if (!http_post)
-            return luaL_argerror(l, 2, "parameter post_form invalid");
+            return luaL_argerror(l, 3, "parameter post_form invalid");
     }
     else if (top > 2 && lua_isstring(l, 3)) {
         postdata = lua_tolstring(l, 3, &postdatalen);
