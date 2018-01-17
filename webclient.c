@@ -418,19 +418,26 @@ static int webclient_getprogress(lua_State* l)
     if (!webrequest)
         return luaL_argerror(l, 2, "parameter index invalid");
 
-    double download_length = 0.0f;
-    double content_length = 0.0f;
+    int is_uploadprogress = lua_toboolean(l, 3);
 
-    CURLcode ret = curl_easy_getinfo(webrequest->curl, CURLINFO_SIZE_DOWNLOAD, &download_length);
-    if (ret != CURLE_OK)
-        return 0;
+    double finished = 0.0f;
+    double total = 0.0f;
 
-    ret = curl_easy_getinfo(webrequest->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &content_length);
-    if (ret != CURLE_OK)
-        return 0;
+    if(!is_uploadprogress) {
+        if (curl_easy_getinfo(webrequest->curl, CURLINFO_SIZE_DOWNLOAD, &finished) != CURLE_OK)
+            return 0;
+        if (curl_easy_getinfo(webrequest->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &total) != CURLE_OK)
+            return 0;
+    }
+    else {
+        if (curl_easy_getinfo(webrequest->curl, CURLINFO_SIZE_UPLOAD, &finished) != CURLE_OK)
+            return 0;
+        if (curl_easy_getinfo(webrequest->curl, CURLINFO_CONTENT_LENGTH_UPLOAD, &total) != CURLE_OK)
+            return 0;
+    }
 
-    lua_pushnumber(l, download_length);
-    lua_pushnumber(l, content_length);
+    lua_pushnumber(l, finished);
+    lua_pushnumber(l, total);
     return 2;
 }
 

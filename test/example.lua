@@ -26,7 +26,8 @@ while next(requests) do
 		
 		webclient:remove_request(req)
 	else
-		local down, total = webclient:get_progress(req)
+		local is_get_upload_progress = false
+		local down, total = webclient:get_progress(req, is_get_upload_progress)
 		-- print("progress", down, total)
 	end
 end
