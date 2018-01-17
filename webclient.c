@@ -157,7 +157,7 @@ static size_t write_callback(char* buffer, size_t block_size, size_t count, void
             webrequest->content_realloc_failed = true;
             return length;
         }
-        webrequest->content = (char *) new_content;
+        webrequest->content = (char *)new_content;
     }
 
     memcpy(webrequest->content + webrequest->content_length, buffer, length);
@@ -187,7 +187,8 @@ static struct webrequest* webclient_realrequest(struct webclient* webclient, con
     if (http_post) {
         webrequest->http_post = http_post;
         curl_easy_setopt(handle, CURLOPT_HTTPPOST, webrequest->http_post);
-    } else if (post_field) {
+    }
+    else if (post_field) {
         curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, (long)post_field_len);
         curl_easy_setopt(handle, CURLOPT_COPYPOSTFIELDS, post_field);
     }
@@ -208,8 +209,8 @@ failed:
 
 static struct curl_httppost* webclient_tohttppost(lua_State* l, int index)
 {
-	enum {forms_max_index = 7};    
-	struct curl_forms forms[forms_max_index + 1];
+    enum { forms_max_index = 7 };
+    struct curl_forms forms[forms_max_index + 1];
 
     int formadd_failed = false;
     struct curl_httppost* firstitem = NULL;
@@ -221,7 +222,7 @@ static struct curl_httppost* webclient_tohttppost(lua_State* l, int index)
 
         lua_pushnil(l);
         while (forms_index < forms_max_index && lua_next(l, -2)) {
-            lua_pushvalue(l, -2); 
+            lua_pushvalue(l, -2);
 
             const char* key = lua_tostring(l, -1);
             size_t value_length = 0;
@@ -231,7 +232,7 @@ static struct curl_httppost* webclient_tohttppost(lua_State* l, int index)
                 forms[forms_index].option = CURLFORM_COPYNAME;
                 forms[forms_index].value = value;
                 forms_index++;
-            } 
+            }
             else if (strcmp(key, "contents") == 0) {
                 forms[forms_index].option = CURLFORM_COPYCONTENTS;
                 forms[forms_index].value = value;
