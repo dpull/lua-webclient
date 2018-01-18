@@ -14,7 +14,7 @@
 	webclient.lua
 		webclient 在 skynet 中的简单应用	
 
-## 运行示例
+## Build
 
 * linux or mac `cmake ../` 
 * windows `cmake -G "Visual Studio 15 2017" ../` 
