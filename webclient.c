@@ -70,14 +70,14 @@ struct webrequest
 
 static WEBCLIENT_MUTEX_T s_webclient_mutex = WEBCLIENT_MUTEX_INITIALIZER;
 
-static int webclient_global_init()
+static void webclient_global_init()
 {
     WEBCLIENT_MUTEX_LOCK(&s_webclient_mutex);
     curl_global_init(CURL_GLOBAL_ALL);
     WEBCLIENT_MUTEX_UNLOCK(&s_webclient_mutex);
 }
 
-static int webclient_global_cleanup()
+static void webclient_global_cleanup()
 {
     WEBCLIENT_MUTEX_LOCK(&s_webclient_mutex);
     curl_global_cleanup();
