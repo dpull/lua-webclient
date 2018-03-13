@@ -31,6 +31,20 @@ THE SOFTWARE.
 #include "lualib.h"
 #include "lauxlib.h"
 
+#ifdef _MSC_VER
+#include <Windows.h>
+#define WEBCLIENT_MUTEX_T           SRWLOCK 
+#define WEBCLIENT_MUTEX_INITIALIZER SRWLOCK_INIT
+#define WEBCLIENT_MUTEX_LOCK        AcquireSRWLockExclusive
+#define WEBCLIENT_MUTEX_UNLOCK      ReleaseSRWLockExclusive
+#else
+#include <pthread.h>
+#define WEBCLIENT_MUTEX_T           pthread_mutex_t 
+#define WEBCLIENT_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
+#define WEBCLIENT_MUTEX_LOCK        pthread_mutex_lock
+#define WEBCLIENT_MUTEX_UNLOCK      pthread_mutex_unlock
+#endif
+
 #define IP_LENGTH               16
 #define MAX(a, b)               (((a) > (b)) ? (a) : (b))
 #define LUA_WEB_CLIENT_MT       ("com.dpull.lib.WebClientMT")
@@ -54,16 +68,32 @@ struct webrequest
     bool content_realloc_failed;
 };
 
+static WEBCLIENT_MUTEX_T s_webclient_mutex = WEBCLIENT_MUTEX_INITIALIZER;
+
+static int webclient_global_init()
+{
+    WEBCLIENT_MUTEX_LOCK(&s_webclient_mutex);
+    curl_global_init(CURL_GLOBAL_ALL);
+    WEBCLIENT_MUTEX_UNLOCK(&s_webclient_mutex);
+}
+
+static int webclient_global_cleanup()
+{
+    WEBCLIENT_MUTEX_LOCK(&s_webclient_mutex);
+    curl_global_cleanup();
+    WEBCLIENT_MUTEX_UNLOCK(&s_webclient_mutex);
+}
+
 static int webclient_create(lua_State* l)
 {
     curl_version_info_data* data = curl_version_info(CURLVERSION_NOW);
     if (data->version_num < 0x070F04)
         return luaL_error(l, "requires 7.15.4 or higher curl, current version is %s", data->version);
 
-    curl_global_init(CURL_GLOBAL_ALL);
+    webclient_global_init();
     CURLM* curlm = curl_multi_init();
     if (!curlm) {
-        curl_global_cleanup();
+        webclient_global_cleanup();
         return luaL_error(l, "webclient create failed");
     }
 
@@ -89,7 +119,7 @@ static int webclient_destory(lua_State* l)
     }
     curl_multi_cleanup(webclient->curlm);
     webclient->curlm = NULL;
-    curl_global_cleanup();
+    webclient_global_cleanup();
     return 0;
 }
 
